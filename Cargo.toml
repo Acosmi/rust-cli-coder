@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
-repository = "https://github.com/Acosmi/rust-cli-coder"
+repository = "https://github.com/Acosmi/open-coder"
 description = "Programming sub-agent with 9-layer fuzzy edit, file tools, and sandboxed execution"
 
 [[bin]]
