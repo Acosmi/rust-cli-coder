@@ -27,7 +27,11 @@ cargo install oa-coder
 或从源码构建：
 
 ```bash
+# GitHub
 git clone https://github.com/Acosmi/rust-cli-coder.git
+# Gitee（国内镜像）
+git clone https://gitee.com/Acosmi/open-coder.git
+
 cd oa-coder
 cargo build --release
 ```
@@ -217,7 +221,11 @@ cargo install oa-coder
 Or build from source:
 
 ```bash
+# GitHub
 git clone https://github.com/Acosmi/rust-cli-coder.git
+# Gitee (China mirror)
+git clone https://gitee.com/Acosmi/open-coder.git
+
 cd oa-coder
 cargo build --release
 ```
