@@ -11,6 +11,7 @@
 **oa-coder** 是一个独立的 MCP（Model Context Protocol）编程子智能体。它通过 stdin/stdout 上的 JSON-RPC 2.0 协议暴露编码工具，可被任何 MCP 兼容客户端作为子进程调用。
 
 核心特性：
+
 - **9 层模糊编辑引擎** — 从精确匹配到 Levenshtein 距离，逐层降级，容忍缩进差异
 - **安全路径限制** — 所有文件操作限定在 workspace 目录内，防止路径穿越
 - **ripgrep 集成** — 代码搜索直接调用 `rg`，毫秒级响应
@@ -25,7 +26,7 @@ cargo install oa-coder
 或从源码构建：
 
 ```bash
-git clone https://github.com/OpenAcosmi/oa-coder.git
+git clone https://github.com/Acosmi/rust-cli-coder.git
 cd oa-coder
 cargo build --release
 ```
@@ -120,6 +121,7 @@ fn main() -> anyhow::Result<()> {
 **oa-coder** is a standalone MCP (Model Context Protocol) programming sub-agent. It exposes coding tools over JSON-RPC 2.0 on stdin/stdout, making it usable as a subprocess by any MCP-compatible client.
 
 Key features:
+
 - **9-layer fuzzy edit engine** — from exact match to Levenshtein distance, progressive fallback tolerates indentation differences
 - **Secure path restriction** — all file operations confined to workspace directory, prevents path traversal
 - **ripgrep integration** — code search via `rg` subprocess, millisecond response times
@@ -134,7 +136,7 @@ cargo install oa-coder
 Or build from source:
 
 ```bash
-git clone https://github.com/OpenAcosmi/oa-coder.git
+git clone https://github.com/Acosmi/rust-cli-coder.git
 cd oa-coder
 cargo build --release
 ```
