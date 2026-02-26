@@ -79,6 +79,48 @@ oa-coder --workspace /path/to/project
 8. **ContextAwareReplacer** — 上下文行锚定 + 相似度
 9. **MultiOccurrenceReplacer** — 多次出现全部替换
 
+### 沙箱执行
+
+oa-coder 的 `bash` 工具支持沙箱模式，通过 `oa-sandbox` 提供安全隔离的命令执行环境。
+
+#### 架构
+
+```text
+stdin (JSON-RPC) → McpServer → ToolRouter → bash tool
+                                                ↓
+                                    sandboxed=true?  ──→  oa-sandbox (隔离执行)
+                                    sandboxed=false? ──→  sh -c (直接执行)
+stdout (JSON-RPC) ←─────────────────────────────────────────┘
+```
+
+#### 运行模式
+
+| 模式 | sandboxed | 说明 |
+|------|-----------|------|
+| **独立模式** | `false`（默认） | 直接通过 `sh -c` 执行命令，适用于本地开发 |
+| **托管模式** | `true` | 通过 `oa-sandbox` 执行，提供进程隔离、文件系统限制、网络控制 |
+
+#### 配置方式
+
+**作为库使用时启用沙箱：**
+
+```rust
+let config = McpServerConfig {
+    workspace: std::env::current_dir()?,
+    sandboxed: true,  // 启用沙箱
+};
+oa_coder::run_mcp_server(config)
+```
+
+**独立 CLI 模式：** 当前默认关闭沙箱，命令在 workspace 目录下直接执行，带有超时保护（默认 120 秒）。
+
+#### 安全特性
+
+- **路径限制** — 所有文件操作（read/write/edit/glob）限定在 workspace 目录内
+- **超时控制** — bash 命令默认 120 秒超时，超时自动 kill 进程
+- **沙箱隔离**（托管模式）— 通过 oa-sandbox 提供进程级隔离
+- **零 unsafe** — `Cargo.toml` 配置 `unsafe_code = "forbid"`
+
 ### 作为 Rust 库使用
 
 ```rust
@@ -188,6 +230,48 @@ Add to your MCP client config:
 7. **TrimmedBoundaryReplacer** — trim boundary blank lines
 8. **ContextAwareReplacer** — context-line anchoring + similarity scoring
 9. **MultiOccurrenceReplacer** — replace all occurrences for `replace_all` mode
+
+### Sandbox Execution
+
+The `bash` tool in oa-coder supports sandbox mode, providing secure isolated command execution via `oa-sandbox`.
+
+#### Architecture
+
+```text
+stdin (JSON-RPC) → McpServer → ToolRouter → bash tool
+                                                ↓
+                                    sandboxed=true?  ──→  oa-sandbox (isolated)
+                                    sandboxed=false? ──→  sh -c (direct exec)
+stdout (JSON-RPC) ←─────────────────────────────────────────┘
+```
+
+#### Execution Modes
+
+| Mode | sandboxed | Description |
+|------|-----------|-------------|
+| **Standalone** | `false` (default) | Executes via `sh -c` directly, suitable for local development |
+| **Managed** | `true` | Executes via `oa-sandbox`, providing process isolation, filesystem restrictions, network control |
+
+#### Configuration
+
+**Enable sandbox as a library:**
+
+```rust
+let config = McpServerConfig {
+    workspace: std::env::current_dir()?,
+    sandboxed: true,  // enable sandbox
+};
+oa_coder::run_mcp_server(config)
+```
+
+**Standalone CLI mode:** Sandbox is disabled by default. Commands execute directly in the workspace directory with timeout protection (default 120 seconds).
+
+#### Security Features
+
+- **Path restriction** — all file operations (read/write/edit/glob) confined to workspace directory
+- **Timeout control** — bash commands have a 120s default timeout, auto-kills on expiry
+- **Sandbox isolation** (managed mode) — process-level isolation via oa-sandbox
+- **Zero unsafe** — `Cargo.toml` enforces `unsafe_code = "forbid"`
 
 ### Library Usage
 
