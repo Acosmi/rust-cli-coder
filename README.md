@@ -12,6 +12,7 @@
 
 核心特性：
 
+- **三平台原生沙箱** — macOS Seatbelt / Linux Landlock+Seccomp / Windows Job Object，Docker 自动降级
 - **9 层模糊编辑引擎** — 从精确匹配到 Levenshtein 距离，逐层降级，容忍缩进差异
 - **安全路径限制** — 所有文件操作限定在 workspace 目录内，防止路径穿越
 - **ripgrep 集成** — 代码搜索直接调用 `rg`，毫秒级响应
@@ -83,6 +84,27 @@ oa-coder --workspace /path/to/project
 
 oa-coder 的 `bash` 工具支持沙箱模式，通过 `oa-sandbox` 提供安全隔离的命令执行环境。
 
+#### ✨ 三平台原生沙箱支持
+
+oa-sandbox 是 **少数支持三大操作系统原生沙箱** 的开源方案之一，每个平台均使用操作系统提供的最优安全机制：
+
+| 平台 | 原生后端 | 隔离机制 | 冷启动 |
+|------|----------|----------|--------|
+| **macOS** | Seatbelt (`sandbox_init_with_parameters`) | SBPL 沙箱配置文件 | ~65ms |
+| **Linux** | Landlock + Seccomp-BPF + 用户命名空间 | 内核级 LSM + 系统调用过滤 | — |
+| **Windows** | 受限令牌 + Job Object + ACL | Win32 进程安全模型 | — |
+| **Docker** | Docker 容器 | 自动降级后端（始终可用） | ~215ms |
+
+当原生后端不可用时，会 **自动无缝降级到 Docker**，确保在任何环境下都能提供沙箱能力。
+
+#### 三级安全模型
+
+| 级别 | 名称 | 网络 | 文件系统 | 适用场景 |
+|------|------|------|----------|----------|
+| **L0** | deny | 全部拒绝 | 最小只读 | 不受信任的代码、沙箱测试 |
+| **L1** | sandbox | 仅公网 TCP | workspace 读写 | MCP 插件、AI 工具调用（默认） |
+| **L2** | full | 完全访问 | 完全访问 | 可信代码 + dry-run 预览 |
+
 #### 架构
 
 ```text
@@ -120,6 +142,22 @@ oa_coder::run_mcp_server(config)
 - **超时控制** — bash 命令默认 120 秒超时，超时自动 kill 进程
 - **沙箱隔离**（托管模式）— 通过 oa-sandbox 提供进程级隔离
 - **零 unsafe** — `Cargo.toml` 配置 `unsafe_code = "forbid"`
+
+#### ⚠️ 注意事项
+
+> **平台依赖**
+>
+> - **macOS**：无额外依赖，Seatbelt 为 macOS 系统内置
+> - **Linux**：需要安装 `libseccomp-dev` >= 2.5.0（`sudo apt install libseccomp-dev`）
+> - **Windows**：需要 Windows 10 或更高版本
+> - **Docker 降级**：需要 Docker Engine 已安装并运行
+
+> **当前限制**
+>
+> - 独立 CLI 模式（`oa-coder`）默认 **不启用沙箱**，需通过库调用或宿主系统设置 `sandboxed: true`
+> - 沙箱模式下的 `bash` 工具依赖 `oa-sandbox` 二进制已安装到 `$PATH`
+> - Docker 降级模式冷启动约 ~215ms，原生模式约 ~65ms，性能存在差异
+> - `oa-sandbox` 中使用了 `unsafe` 代码用于平台 FFI 调用（macOS Seatbelt FFI、Linux libseccomp、Windows Win32 API），所有 `unsafe` 块均附带 `// SAFETY:` 注释
 
 ### 作为 Rust 库使用
 
@@ -164,6 +202,7 @@ fn main() -> anyhow::Result<()> {
 
 Key features:
 
+- **Three-platform native sandbox** — macOS Seatbelt / Linux Landlock+Seccomp / Windows Job Object, with Docker auto-fallback
 - **9-layer fuzzy edit engine** — from exact match to Levenshtein distance, progressive fallback tolerates indentation differences
 - **Secure path restriction** — all file operations confined to workspace directory, prevents path traversal
 - **ripgrep integration** — code search via `rg` subprocess, millisecond response times
@@ -235,6 +274,27 @@ Add to your MCP client config:
 
 The `bash` tool in oa-coder supports sandbox mode, providing secure isolated command execution via `oa-sandbox`.
 
+#### ✨ Three-Platform Native Sandbox Support
+
+oa-sandbox is **one of the few open-source solutions with native sandbox support across all three major operating systems**, using the optimal OS-level security mechanisms on each platform:
+
+| Platform | Native Backend | Isolation Mechanism | Cold Start |
+|----------|---------------|---------------------|------------|
+| **macOS** | Seatbelt (`sandbox_init_with_parameters`) | SBPL sandbox profiles | ~65ms |
+| **Linux** | Landlock + Seccomp-BPF + User Namespaces | Kernel LSM + syscall filtering | — |
+| **Windows** | Restricted Token + Job Object + ACL | Win32 process security model | — |
+| **Docker** | Docker container | Automatic fallback (always available) | ~215ms |
+
+When native backends are unavailable, the system **automatically and seamlessly falls back to Docker**, ensuring sandbox capabilities in any environment.
+
+#### Three-Tier Security Model
+
+| Level | Name | Network | Filesystem | Use Case |
+|-------|------|---------|------------|----------|
+| **L0** | deny | All denied | Minimal read-only | Untrusted code, sandbox testing |
+| **L1** | sandbox | Public TCP only | Workspace read/write | MCP plugins, AI tool calls (default) |
+| **L2** | full | Full access | Full access | Trusted code + dry-run preview |
+
 #### Architecture
 
 ```text
@@ -272,6 +332,22 @@ oa_coder::run_mcp_server(config)
 - **Timeout control** — bash commands have a 120s default timeout, auto-kills on expiry
 - **Sandbox isolation** (managed mode) — process-level isolation via oa-sandbox
 - **Zero unsafe** — `Cargo.toml` enforces `unsafe_code = "forbid"`
+
+#### ⚠️ Notes & Caveats
+
+> **Platform Dependencies**
+>
+> - **macOS**: No additional dependencies; Seatbelt is built into macOS
+> - **Linux**: Requires `libseccomp-dev` >= 2.5.0 (`sudo apt install libseccomp-dev`)
+> - **Windows**: Requires Windows 10 or later
+> - **Docker fallback**: Requires Docker Engine installed and running
+
+> **Current Limitations**
+>
+> - Standalone CLI mode (`oa-coder`) does **not enable sandbox by default**; set `sandboxed: true` via library usage or host system configuration
+> - The sandboxed `bash` tool requires the `oa-sandbox` binary to be installed and available in `$PATH`
+> - Docker fallback cold start (~215ms) is slower than native mode (~65ms)
+> - `oa-sandbox` uses `unsafe` code for platform FFI calls (macOS Seatbelt FFI, Linux libseccomp, Windows Win32 API); all `unsafe` blocks include `// SAFETY:` comments
 
 ### Library Usage
 
