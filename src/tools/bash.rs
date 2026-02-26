@@ -1,5 +1,11 @@
-//! Bash tool -- command execution.
+//! Bash tool — command execution with optional OS-native sandbox.
+//!
+//! When the `sandbox` feature is enabled and `sandboxed=true`, commands execute
+//! inside an [`oa_sandbox`] isolation boundary (macOS Seatbelt / Linux
+//! Landlock+Seccomp / Windows `AppContainer`). Otherwise falls back to direct
+//! `sh -c` execution.
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::process::Command;
 
@@ -18,13 +24,15 @@ pub struct BashParams {
     pub timeout: u64,
 }
 
-const fn default_timeout() -> u64 { 120 }
+const fn default_timeout() -> u64 {
+    120
+}
 
+#[must_use]
 pub fn tool_definition() -> ToolDefinition {
     ToolDefinition {
         name: "bash".to_owned(),
-        description: "Execute a bash command in the workspace directory."
-            .to_owned(),
+        description: "Execute a bash command in the workspace directory.".to_owned(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -45,8 +53,9 @@ pub fn tool_definition() -> ToolDefinition {
 
 /// Execute the bash tool.
 ///
-/// Always uses direct execution via `sh -c`. The `sandboxed` parameter is
-/// accepted for API compatibility but has no effect in standalone mode.
+/// When `sandboxed` is `true` and the `sandbox` feature is compiled in,
+/// the command runs inside an OS-native sandbox via [`oa_sandbox`].
+/// Otherwise falls back to direct `sh -c` execution.
 pub fn execute(
     workspace: &Path,
     sandboxed: bool,
@@ -56,11 +65,105 @@ pub fn execute(
         serde_json::from_value(arguments).context("invalid bash parameters")?;
 
     if sandboxed {
-        tracing::warn!("sandbox not available in standalone mode, using direct execution");
+        #[cfg(feature = "sandbox")]
+        {
+            return execute_sandboxed(workspace, &params);
+        }
+
+        #[cfg(not(feature = "sandbox"))]
+        {
+            tracing::warn!("sandbox feature not compiled in, falling back to direct execution");
+        }
     }
 
     execute_direct(workspace, &params)
 }
+
+// ---------------------------------------------------------------------------
+// Sandboxed execution (oa-sandbox)
+// ---------------------------------------------------------------------------
+
+/// Execute a command inside the OS-native sandbox.
+#[cfg(feature = "sandbox")]
+fn execute_sandboxed(workspace: &Path, params: &BashParams) -> Result<ToolCallResult> {
+    use oa_sandbox::config::{
+        BackendPreference, OutputFormat, ResourceLimits, SandboxConfig, SecurityLevel,
+    };
+
+    tracing::info!(command = %params.command, "executing in sandbox");
+
+    let config = SandboxConfig {
+        security_level: SecurityLevel::L1Sandbox,
+        command: "sh".to_owned(),
+        args: vec!["-c".to_owned(), params.command.clone()],
+        workspace: workspace.to_path_buf(),
+        mounts: vec![],
+        resource_limits: ResourceLimits {
+            timeout_secs: Some(params.timeout),
+            ..ResourceLimits::default()
+        },
+        network_policy: None, // use L1 default (Restricted)
+        env_vars: std::collections::HashMap::new(),
+        format: OutputFormat::Json,
+        backend: BackendPreference::Auto,
+    };
+
+    // Select best available backend (native → Docker fallback).
+    let runner = oa_sandbox::select_runner(&config)
+        .map_err(|e| anyhow::anyhow!("sandbox backend selection failed: {e}"))?;
+
+    tracing::debug!(backend = runner.name(), "sandbox backend selected");
+
+    let output = runner
+        .run(&config)
+        .map_err(|e| anyhow::anyhow!("sandbox execution failed: {e}"))?;
+
+    // Convert SandboxOutput → ToolCallResult.
+    let mut text = String::new();
+    if !output.stdout.is_empty() {
+        text.push_str(&output.stdout);
+    }
+    if !output.stderr.is_empty() {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str("STDERR:\n");
+        text.push_str(&output.stderr);
+    }
+    if let Some(ref error_msg) = output.error {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str("SANDBOX ERROR:\n");
+        text.push_str(error_msg);
+    }
+
+    // Append metadata footer.
+    let _ = write!(
+        text,
+        "\n(exit code: {}, sandbox: {}, duration: {}ms)",
+        output.exit_code, output.sandbox_backend, output.duration_ms
+    );
+
+    if text.trim().is_empty() {
+        text = format!(
+            "(exit code: {}, sandbox: {})",
+            output.exit_code, output.sandbox_backend
+        );
+    }
+
+    Ok(ToolCallResult {
+        content: vec![ContentItem {
+            content_type: "text".to_owned(),
+            text,
+        }],
+        is_error: output.exit_code != 0,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Direct execution (no sandbox)
+// ---------------------------------------------------------------------------
 
 /// Direct execution without sandbox.
 fn execute_direct(workspace: &Path, params: &BashParams) -> Result<ToolCallResult> {
@@ -126,7 +229,7 @@ fn execute_direct(workspace: &Path, params: &BashParams) -> Result<ToolCallResul
     if text.is_empty() {
         text = format!("(exit code: {exit_code})");
     } else {
-        text.push_str(&format!("\n(exit code: {exit_code})"));
+        let _ = write!(text, "\n(exit code: {exit_code})");
     }
 
     Ok(ToolCallResult {

@@ -1,6 +1,6 @@
 //! oa-coder -- standalone MCP programming sub-agent.
 //!
-//! Usage: oa-coder --workspace <path>
+//! Usage: oa-coder --workspace <path> [--sandboxed]
 
 fn main() -> anyhow::Result<()> {
     // Initialize tracing to stderr so it does not interfere with MCP stdio.
@@ -12,16 +12,22 @@ fn main() -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let workspace = std::env::args()
-        .skip_while(|a| a != "--workspace")
-        .nth(1)
+    let args: Vec<String> = std::env::args().collect();
+
+    let workspace = args
+        .iter()
+        .position(|a| a == "--workspace")
+        .and_then(|i| args.get(i + 1))
+        .cloned()
         .unwrap_or_else(|| ".".to_string());
+
+    let sandboxed = args.iter().any(|a| a == "--sandboxed");
 
     let workspace = std::path::Path::new(&workspace).canonicalize()?;
 
     let config = oa_coder::server::McpServerConfig {
         workspace,
-        sandboxed: false,
+        sandboxed,
     };
 
     oa_coder::run_mcp_server(config)

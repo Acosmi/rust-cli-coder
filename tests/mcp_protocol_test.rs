@@ -67,10 +67,7 @@ fn test_json_rpc_error_response() {
 
 #[test]
 fn test_tool_definitions_complete() {
-    let router = oa_coder::tools::ToolRouter::new(
-        std::path::PathBuf::from("/tmp"),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(std::path::PathBuf::from("/tmp"), false);
 
     let tools = router.list_tools();
     assert_eq!(tools.len(), 6);
@@ -85,21 +82,31 @@ fn test_tool_definitions_complete() {
 
     // Verify each tool has a description and input_schema.
     for tool in &tools {
-        assert!(!tool.description.is_empty(), "tool {} missing description", tool.name);
-        assert!(tool.input_schema.is_object(), "tool {} missing input_schema", tool.name);
+        assert!(
+            !tool.description.is_empty(),
+            "tool {} missing description",
+            tool.name
+        );
+        assert!(
+            tool.input_schema.is_object(),
+            "tool {} missing input_schema",
+            tool.name
+        );
     }
 }
 
 #[test]
 fn test_tool_call_read_nonexistent() {
-    let router = oa_coder::tools::ToolRouter::new(
-        std::path::PathBuf::from("/tmp"),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(std::path::PathBuf::from("/tmp"), false);
 
-    let result = router.call_tool("read", json!({
-        "filePath": "/tmp/nonexistent_oa_coder_test_file_12345.txt"
-    })).expect("should not error");
+    let result = router
+        .call_tool(
+            "read",
+            json!({
+                "filePath": "/tmp/nonexistent_oa_coder_test_file_12345.txt"
+            }),
+        )
+        .expect("should not error");
 
     assert!(result.is_error);
     assert!(result.content[0].text.contains("not found"));
@@ -107,12 +114,10 @@ fn test_tool_call_read_nonexistent() {
 
 #[test]
 fn test_tool_call_unknown() {
-    let router = oa_coder::tools::ToolRouter::new(
-        std::path::PathBuf::from("/tmp"),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(std::path::PathBuf::from("/tmp"), false);
 
-    let result = router.call_tool("nonexistent_tool", json!({}))
+    let result = router
+        .call_tool("nonexistent_tool", json!({}))
         .expect("should not error");
 
     assert!(result.is_error);
@@ -124,23 +129,30 @@ fn test_tool_call_write_and_read() {
     let dir = tempfile::tempdir().expect("tempdir");
     let file_path = dir.path().join("test_write.txt");
 
-    let router = oa_coder::tools::ToolRouter::new(
-        dir.path().to_path_buf(),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(dir.path().to_path_buf(), false);
 
     // Write a file.
-    let write_result = router.call_tool("write", json!({
-        "filePath": file_path.to_str().expect("path"),
-        "content": "line1\nline2\nline3\n"
-    })).expect("write should succeed");
+    let write_result = router
+        .call_tool(
+            "write",
+            json!({
+                "filePath": file_path.to_str().expect("path"),
+                "content": "line1\nline2\nline3\n"
+            }),
+        )
+        .expect("write should succeed");
     assert!(!write_result.is_error);
     assert!(write_result.content[0].text.contains("Created"));
 
     // Read it back.
-    let read_result = router.call_tool("read", json!({
-        "filePath": file_path.to_str().expect("path")
-    })).expect("read should succeed");
+    let read_result = router
+        .call_tool(
+            "read",
+            json!({
+                "filePath": file_path.to_str().expect("path")
+            }),
+        )
+        .expect("read should succeed");
     assert!(!read_result.is_error);
     assert!(read_result.content[0].text.contains("line1"));
     assert!(read_result.content[0].text.contains("line2"));
@@ -153,20 +165,24 @@ fn test_tool_call_edit() {
     let file_path = dir.path().join("test_edit.txt");
     std::fs::write(&file_path, "hello world\nfoo bar\n").expect("write");
 
-    let router = oa_coder::tools::ToolRouter::new(
-        dir.path().to_path_buf(),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(dir.path().to_path_buf(), false);
 
-    let result = router.call_tool("edit", json!({
-        "filePath": file_path.to_str().expect("path"),
-        "oldString": "foo bar",
-        "newString": "baz qux"
-    })).expect("edit should succeed");
+    let result = router
+        .call_tool(
+            "edit",
+            json!({
+                "filePath": file_path.to_str().expect("path"),
+                "oldString": "foo bar",
+                "newString": "baz qux"
+            }),
+        )
+        .expect("edit should succeed");
 
     assert!(!result.is_error);
     // Verify the diff output.
-    assert!(result.content[0].text.contains("-foo bar") || result.content[0].text.contains("+baz qux"));
+    assert!(
+        result.content[0].text.contains("-foo bar") || result.content[0].text.contains("+baz qux")
+    );
 
     // Verify file was actually changed.
     let content = std::fs::read_to_string(&file_path).expect("read");
@@ -179,16 +195,18 @@ fn test_tool_call_edit_create_new_file() {
     let dir = tempfile::tempdir().expect("tempdir");
     let file_path = dir.path().join("subdir/new_file.txt");
 
-    let router = oa_coder::tools::ToolRouter::new(
-        dir.path().to_path_buf(),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(dir.path().to_path_buf(), false);
 
-    let result = router.call_tool("edit", json!({
-        "filePath": file_path.to_str().expect("path"),
-        "oldString": "",
-        "newString": "new content here"
-    })).expect("edit should succeed");
+    let result = router
+        .call_tool(
+            "edit",
+            json!({
+                "filePath": file_path.to_str().expect("path"),
+                "oldString": "",
+                "newString": "new content here"
+            }),
+        )
+        .expect("edit should succeed");
 
     assert!(!result.is_error);
     assert!(result.content[0].text.contains("Created"));
@@ -205,14 +223,16 @@ fn test_tool_call_glob() {
     std::fs::create_dir_all(dir.path().join("sub")).expect("mkdir");
     std::fs::write(dir.path().join("sub/nested.rs"), "mod sub;").expect("write");
 
-    let router = oa_coder::tools::ToolRouter::new(
-        dir.path().to_path_buf(),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(dir.path().to_path_buf(), false);
 
-    let result = router.call_tool("glob", json!({
-        "pattern": "**/*.rs"
-    })).expect("glob should succeed");
+    let result = router
+        .call_tool(
+            "glob",
+            json!({
+                "pattern": "**/*.rs"
+            }),
+        )
+        .expect("glob should succeed");
 
     assert!(!result.is_error);
     assert!(result.content[0].text.contains("test.rs"));
@@ -223,18 +243,23 @@ fn test_tool_call_glob() {
 #[test]
 fn test_tool_call_grep() {
     let dir = tempfile::tempdir().expect("tempdir");
-    std::fs::write(dir.path().join("test.txt"), "hello world\nfoo bar\nhello again\n")
-        .expect("write");
+    std::fs::write(
+        dir.path().join("test.txt"),
+        "hello world\nfoo bar\nhello again\n",
+    )
+    .expect("write");
 
-    let router = oa_coder::tools::ToolRouter::new(
-        dir.path().to_path_buf(),
-        false,
-    );
+    let router = oa_coder::tools::ToolRouter::new(dir.path().to_path_buf(), false);
 
-    let result = router.call_tool("grep", json!({
-        "pattern": "hello",
-        "path": dir.path().to_str().expect("path")
-    })).expect("grep should succeed");
+    let result = router
+        .call_tool(
+            "grep",
+            json!({
+                "pattern": "hello",
+                "path": dir.path().to_str().expect("path")
+            }),
+        )
+        .expect("grep should succeed");
 
     assert!(!result.is_error);
     assert!(result.content[0].text.contains("hello"));
@@ -249,10 +274,42 @@ fn test_tool_call_bash() {
         false, // not sandboxed
     );
 
-    let result = router.call_tool("bash", json!({
-        "command": "echo 'oa-coder-test-output'"
-    })).expect("bash should succeed");
+    let result = router
+        .call_tool(
+            "bash",
+            json!({
+                "command": "echo 'oa-coder-test-output'"
+            }),
+        )
+        .expect("bash should succeed");
 
     assert!(!result.is_error);
     assert!(result.content[0].text.contains("oa-coder-test-output"));
+}
+
+#[cfg(feature = "sandbox")]
+#[test]
+fn test_tool_call_bash_sandboxed() {
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    let router = oa_coder::tools::ToolRouter::new(
+        dir.path().to_path_buf(),
+        true, // sandboxed
+    );
+
+    let result = router
+        .call_tool(
+            "bash",
+            json!({
+                "command": "echo 'sandbox-test-output'"
+            }),
+        )
+        .expect("sandboxed bash should succeed");
+
+    // The output should contain our test string regardless of backend.
+    assert!(
+        result.content[0].text.contains("sandbox-test-output"),
+        "expected sandbox output to contain test string, got: {}",
+        result.content[0].text
+    );
 }

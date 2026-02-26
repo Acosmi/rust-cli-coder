@@ -42,8 +42,12 @@ which = "7.0"
 # Regex (for replacers)
 regex = "1.11"
 
+# OS-native sandbox runtime (optional)
+oa-sandbox = { path = "../oa-sandbox", optional = true }
+
 [features]
-default = []
+default = ["sandbox"]
+sandbox = ["dep:oa-sandbox"]
 http = ["dep:reqwest"]
 
 [dev-dependencies]
